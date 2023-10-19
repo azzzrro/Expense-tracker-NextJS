@@ -1,113 +1,211 @@
-import Image from 'next/image'
+'use client'
+import React, { MouseEvent, useEffect, useState } from "react";
+import { collection, addDoc, updateDoc, getDocs, QuerySnapshot, query, onSnapshot, deleteDoc, doc } from "firebase/firestore";
+import { db } from "./firebase";
+import toast from "react-hot-toast";
+
 
 export default function Home() {
+  const [items, setitems] = useState<any[]>([])
+
+  const [total, settotal] = useState(0)
+
+  const [newitem, setnewitem] = useState({ name: "", price: "" })
+
+  ///ADD ITEM
+  const addItem = async (e: MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+    if (newitem.name.trim() === "" || newitem.price.trim() === "") {
+      return toast.error("Please enter valid data")
+    } else if (Boolean(Number(newitem.name))) {
+      return toast.error("Enter valid name")
+    }
+    try {
+      setitems([...items, newitem])
+      await addDoc(collection(db, "items"), {
+        name: newitem.name.trim(),
+        price: newitem.price
+      })
+      toast.success("Added New Item")
+      setnewitem({ name: "", price: "" })
+    } catch (error) {
+      toast.error((error as Error).message)
+    }
+  }
+
+  ///GET ITEM
+  useEffect(() => {
+    const q = query(collection(db, 'items'))
+    const unsubscribe = onSnapshot(q, (QuerySnapshot) => {
+      let itemsArr: { id: string; }[] = []
+      QuerySnapshot.forEach((doc) => {
+        itemsArr.push({ ...doc.data(), id: doc.id })
+      })
+      setitems(itemsArr)
+
+      const calculateTotal = () => {
+        const totalPrice = itemsArr.reduce((sum, item: any) => sum + parseFloat(item.price), 0)
+        settotal(totalPrice)
+      }
+      calculateTotal()
+      return () => unsubscribe()
+    })
+  }, [])
+
+
+  ///DELETE ITEM
+
+  const deleteItem = async (id: string) => {
+    await deleteDoc(doc(db, 'items', id))
+    toast.success("Successfully deleted")
+  }
+
+
+  ///EDIT ITEM
+
+  const [editingID, seteditingID] = useState("")
+
+  const [editItem, seteditItem] = useState({ name: "", price: "" })
+
+  const editOne = async (id: string) => {
+    const item = items.find((data) => data.id === id)
+    if (item) {
+      seteditingID(id)
+      seteditItem({
+        name: item.name,
+        price: item.price
+      })
+    }
+  }
+
+  const update = async () => {
+    if (editItem.name.trim() === "" || editItem.price.trim() === "" || Number(editItem.price) <= 0) {
+      return toast.error("Please enter valid data")
+    } else if (Boolean(Number(editItem.name))) {
+      return toast.error("Enter valid name")
+    }
+    try {
+      await updateDoc(doc(db, "items", editingID), {
+        name: editItem.name,
+        price: editItem.price
+      })
+      toast.success("Updated Successfully")
+      seteditingID("")
+    } catch (error) {
+      toast.error((error as Error).message)
+    }
+  }
+
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <main className="flex min-h-screen flex-col items-center gap-4 p-4 sm:p-24">
+      <h1 className="text-5xl font-bold drop-shadow-lg p-4 text-center text-white">Expense Tracker</h1>
+      <div className="z-10 drop-shadow-xl max-w-lg w-full items-center justify-between font-mono text-sm">
+        <div className="bg-slate-800 p-6 rounded-lg">
+          <form className="grid grid-cols-6 items-center text-black">
+            <input
+              value={newitem.name}
+              onChange={(e) => setnewitem({ ...newitem, name: e.target.value })}
+              className="outline-none rounded-lg col-span-3 p-3 border"
+              type="text"
+              placeholder="Enter Item" />
+            <input
+              value={newitem.price}
+              onChange={(e) => setnewitem({ ...newitem, price: e.target.value })}
+              className="outline-none rounded-lg col-span-2 p-3 border mx-3"
+              type="number"
+              placeholder="Enter amount" />
+            <button
+              onClick={(e) => addItem(e)}
+              className="rounded-lg text-white bg-slate-950 hover:bg-slate-900 p-3 text-xl"
+              type="submit">
+              +
+            </button>
+          </form>
+          {items.length === 0 && (
+            <>
+              <div className="shadow rounded-md p-4 w-full mx-auto">
+                <div className="animate-pulse flex space-x-4">
+                  <div className="flex-1 space-y-6 py-1">
+                    <div className="space-y-3">
+                      <div className="h-2 bg-slate-700 rounded" />
+                      <div className="h-2 bg-slate-700 rounded" />
+                    </div>
+                    <div className="space-y-3">
+                      <div className="h-2 bg-slate-700 rounded" />
+                      <div className="h-2 bg-slate-700 rounded" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+          <ul>
+            {items.map((item: any, id: any) => (
+              <li key={id} className="hover:scale-[1.01] hover:text-slate-900 text-white hover:bg-indigo-100  transition-transform duration-300 ease-in-out my-4 w-full rounded-lg flex justify-between bg-slate-950">
+                <div className="py-4 md:p-3 w-full flex md:justify-between justify-center ">
+                  {editingID === item.id ? (
+                    <>
+                      <input
+                        value={editItem.name}
+                        onChange={(e) => seteditItem({ ...editItem, name: e.target.value })}
+                        className="md:w-36 rounded-lg outline-none text-black w-20 p-3 border"
+                        type="text"
+                        placeholder="Enter Item" />
+                      <input
+                        value={editItem.price}
+                        onChange={(e) => seteditItem({ ...editItem, price: e.target.value })}
+                        className="md:w-36 rounded-lg outline-none text-black w-20 pl-3 border mx-3"
+                        type="number"
+                        placeholder="Enter amount" />
+                    </>
+                  ) : (
+                    <>
+                      <span className="capitalize ">{item.name}</span>
+                      <span className="">₹{item.price}</span>
+                    </>
+                  )}
+
+                </div>
+                {editingID === item.id ? (
+                  <>
+                    <button
+                      onClick={(e) => seteditingID("")}
+                      className=" p-3 border-l-2 hover:text-white border-slate-900 hover:bg-slate-900 w-16">
+                      CANCEL
+                    </button>
+                    <button
+                      onClick={(e) => update()}
+                      className="p-4 border-l-2 hover:text-white border-slate-900 hover:bg-slate-900 w-16">
+                      DONE
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={(e) => editOne(item.id)}
+                      className="p-4 border-l-2 hover:text-white border-slate-900 hover:bg-slate-900 w-16">
+                      EDIT
+                    </button>
+                    <button
+                      onClick={(e) => deleteItem(item.id)}
+                      className=" p-4 border-l-2 hover:text-white border-slate-900 hover:bg-slate-900 w-16">
+                      X
+                    </button>
+                  </>
+                )}
+
+              </li>
+            ))}
+          </ul>
+          {items.length < 1 ? ("") : (
+            <div className="flex justify-between p-3 text-xl  text-white">
+              <span>Total</span>
+              <span>₹{total}</span>
+            </div>
+          )}
         </div>
       </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore the Next.js 13 playground.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
     </main>
-  )
+  );
 }
